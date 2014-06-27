@@ -1080,6 +1080,23 @@
 #define LWIP_CALLBACK_API               1
 #endif
 
+/**
+ * TCP_RANDOMIZE_INITIAL_ISS==1: randomize the initial sequence number
+ * This can prevent creating predictable sequence numbers after booting a
+ * device.
+ */
+#ifndef LWIP_TCP_RANDOMIZE_INITIAL_ISS
+#define LWIP_TCP_RANDOMIZE_INITIAL_ISS 0
+#endif
+
+/**
+ * LWIP_TCP_ISS_TICK_MULTIPLIER: non zero values cause the
+ * initial sequence number to be incremented by this value every
+ * coarse timer tick.
+ */
+#ifndef LWIP_TCP_ISS_TICK_MULTIPLIER
+#define LWIP_TCP_ISS_TICK_MULTIPLIER 0
+#endif
 
 /*
    ----------------------------------
