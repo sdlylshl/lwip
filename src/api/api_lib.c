@@ -628,11 +628,19 @@ netconn_write_partly(struct netconn *conn, const void *dataptr, size_t size,
   } else {
     msg.msg.msg.w.time_started = 0;
   }
+
+  logInfo(".conn=%08x dataptr=%08x apiflags=%08x len=%u time_started=%u",
+      (uint32_t)msg.msg.conn, (uint32_t)msg.msg.msg.w.dataptr, msg.msg.msg.w.apiflags, msg.msg.msg.w.len, msg.msg.msg.w.time_started);
+#else
+  logInfo(".conn=%08x dataptr=%08x apiflags=%08x len=%u dontblock=%d",
+      (uint32_t)msg.msg.conn, (uint32_t)msg.msg.msg.w.dataptr, msg.msg.msg.w.apiflags, msg.msg.msg.w.len, dontblock);
+
 #endif /* LWIP_SO_SNDTIMEO */
 
   /* For locking the core: this _can_ be delayed on low memory/low send buffer,
      but if it is, this is done inside api_msg.c:do_write(), so we can use the
      non-blocking version here. */
+
   err = TCPIP_APIMSG(&msg);
   if ((err == ERR_OK) && (bytes_written != NULL)) {
     if (dontblock
