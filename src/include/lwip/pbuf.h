@@ -30,8 +30,8 @@
  *
  */
 
-#ifndef __LWIP_PBUF_H__
-#define __LWIP_PBUF_H__
+#ifndef LWIP_HDR_PBUF_H
+#define LWIP_HDR_PBUF_H
 
 #include "lwip/opt.h"
 #include "lwip/err.h"
@@ -44,8 +44,15 @@ extern "C" {
  * of IP_FRAG */
 #define LWIP_SUPPORT_CUSTOM_PBUF (IP_FRAG && !IP_FRAG_USES_STATIC_BUF && !LWIP_NETIF_TX_SINGLE_PBUF)
 
+/* @todo: We need a mechanism to prevent wasting memory in every pbuf
+   (TCP vs. UDP, IPv4 vs. IPv6: UDP/IPv4 packets may waste up to 28 bytes) */
+
 #define PBUF_TRANSPORT_HLEN 20
+#if LWIP_IPV6
+#define PBUF_IP_HLEN        40
+#else
 #define PBUF_IP_HLEN        20
+#endif
 
 typedef enum {
   PBUF_TRANSPORT,
@@ -129,7 +136,7 @@ struct pbuf_custom {
 #endif /* PBUF_POOL_FREE_OOSEQ */
 #if NO_SYS && PBUF_POOL_FREE_OOSEQ
 extern volatile u8_t pbuf_free_ooseq_pending;
-void pbuf_free_ooseq();
+void pbuf_free_ooseq(void);
 /** When not using sys_check_timeouts(), call PBUF_CHECK_FREE_OOSEQ()
     at regular intervals from main level to check if ooseq pbufs need to be
     freed! */
@@ -165,6 +172,9 @@ struct pbuf *pbuf_coalesce(struct pbuf *p, pbuf_layer layer);
 err_t pbuf_fill_chksum(struct pbuf *p, u16_t start_offset, const void *dataptr,
                        u16_t len, u16_t *chksum);
 #endif /* LWIP_CHECKSUM_ON_COPY */
+#if LWIP_TCP && TCP_QUEUE_OOSEQ && LWIP_WND_SCALE
+void pbuf_split_64k(struct pbuf *p, struct pbuf **rest);
+#endif /* LWIP_TCP && TCP_QUEUE_OOSEQ && LWIP_WND_SCALE */
 
 u8_t pbuf_get_at(struct pbuf* p, u16_t offset);
 u16_t pbuf_memcmp(struct pbuf* p, u16_t offset, const void* s2, u16_t n);
@@ -175,4 +185,4 @@ u16_t pbuf_strstr(struct pbuf* p, const char* substr);
 }
 #endif
 
-#endif /* __LWIP_PBUF_H__ */
+#endif /* LWIP_HDR_PBUF_H */

@@ -41,8 +41,8 @@
  * <kontakt@dspies.de>
  */
  
-#ifndef __LWIP_AUTOIP_H__
-#define __LWIP_AUTOIP_H__
+#ifndef LWIP_HDR_AUTOIP_H
+#define LWIP_HDR_AUTOIP_H
 
 #include "lwip/opt.h"
 
@@ -94,6 +94,9 @@ struct autoip
 /** Set a struct autoip allocated by the application to work with */
 void autoip_set_struct(struct netif *netif, struct autoip *autoip);
 
+/** Remove a struct autoip previously set to the netif using autoip_set_struct() */
+#define autoip_remove_struct(netif) do { (netif)->autoip = NULL; } while (0)
+
 /** Start AutoIP client */
 err_t autoip_start(struct netif *netif);
 
@@ -115,4 +118,4 @@ void autoip_network_changed(struct netif *netif);
 
 #endif /* LWIP_AUTOIP */
 
-#endif /* __LWIP_AUTOIP_H__ */
+#endif /* LWIP_HDR_AUTOIP_H */

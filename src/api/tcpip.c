@@ -46,8 +46,14 @@
 #include "lwip/pbuf.h"
 #include "lwip/tcpip.h"
 #include "lwip/init.h"
+#include "lwip/ip.h"
 #include "netif/etharp.h"
-#include "netif/ppp_oe.h"
+#include "netif/ppp/pppoe.h"
+
+#define TCPIP_MSG_VAR_REF(name)     API_VAR_REF(name)
+#define TCPIP_MSG_VAR_DECLARE(name) API_VAR_DECLARE(struct tcpip_msg, name)
+#define TCPIP_MSG_VAR_ALLOC(name)   API_VAR_ALLOC(struct tcpip_msg, MEMP_TCPIP_MSG_API, name)
+#define TCPIP_MSG_VAR_FREE(name)    API_VAR_FREE(MEMP_TCPIP_MSG_API, name)
 
 /* global variables */
 static tcpip_init_done_fn tcpip_init_done;
@@ -87,6 +93,11 @@ tcpip_thread(void *arg)
     /* wait for a message, timeouts are processed while waiting */
     sys_timeouts_mbox_fetch(&mbox, (void **)&msg);
     LOCK_TCPIP_CORE();
+    if (msg == NULL) {
+      LWIP_DEBUGF(TCPIP_DEBUG, ("tcpip_thread: invalid message: NULL\n"));
+      LWIP_ASSERT("tcpip_thread: invalid message", 0);
+      continue;
+    }
     switch (msg->type) {
 #if LWIP_NETCONN
     case TCPIP_MSG_API:
@@ -103,6 +114,11 @@ tcpip_thread(void *arg)
         ethernet_input(msg->msg.inp.p, msg->msg.inp.netif);
       } else
 #endif /* LWIP_ETHERNET */
+#if LWIP_IPV6
+      if ((*((unsigned char *)(msg->msg.inp.p->payload)) & 0xf0) == 0x60) {
+          ip6_input(msg->msg.inp.p, msg->msg.inp.netif);
+      } else
+#endif /* LWIP_IPV6 */
       {
         ip_input(msg->msg.inp.p, msg->msg.inp.netif);
       }
@@ -116,6 +132,13 @@ tcpip_thread(void *arg)
       msg->msg.netifapimsg->function(&(msg->msg.netifapimsg->msg));
       break;
 #endif /* LWIP_NETIF_API */
+
+#if LWIP_PPP_API
+    case TCPIP_MSG_PPPAPI:
+      LWIP_DEBUGF(TCPIP_DEBUG, ("tcpip_thread: PPP API message %p\n", (void *)msg));
+      msg->msg.pppapimsg->function(&(msg->msg.pppapimsg->msg));
+      break;
+#endif /* LWIP_PPP_API */
 
 #if LWIP_TCPIP_TIMEOUT
     case TCPIP_MSG_TIMEOUT:
@@ -305,46 +328,24 @@ tcpip_untimeout(sys_timeout_handler h, void *arg)
 err_t
 tcpip_apimsg(struct api_msg *apimsg)
 {
-  struct tcpip_msg msg;
+  TCPIP_MSG_VAR_DECLARE(msg);
 #ifdef LWIP_DEBUG
   /* catch functions that don't set err */
   apimsg->msg.err = ERR_VAL;
 #endif
   
   if (sys_mbox_valid(&mbox)) {
-    msg.type = TCPIP_MSG_API;
-    msg.msg.apimsg = apimsg;
-    sys_mbox_post(&mbox, &msg);
+    TCPIP_MSG_VAR_ALLOC(msg);
+    TCPIP_MSG_VAR_REF(msg).type = TCPIP_MSG_API;
+    TCPIP_MSG_VAR_REF(msg).msg.apimsg = apimsg;
+    sys_mbox_post(&mbox, &TCPIP_MSG_VAR_REF(msg));
     sys_arch_sem_wait(&apimsg->msg.conn->op_completed, 0);
+    TCPIP_MSG_VAR_FREE(msg);
     return apimsg->msg.err;
   }
   return ERR_VAL;
 }
 
-#if LWIP_TCPIP_CORE_LOCKING
-/**
- * Call the lower part of a netconn_* function
- * This function has exclusive access to lwIP core code by locking it
- * before the function is called.
- *
- * @param apimsg a struct containing the function to call and its parameters
- * @return ERR_OK (only for compatibility fo tcpip_apimsg())
- */
-err_t
-tcpip_apimsg_lock(struct api_msg *apimsg)
-{
-#ifdef LWIP_DEBUG
-  /* catch functions that don't set err */
-  apimsg->msg.err = ERR_VAL;
-#endif
-
-  LOCK_TCPIP_CORE();
-  apimsg->function(&(apimsg->msg));
-  UNLOCK_TCPIP_CORE();
-  return apimsg->msg.err;
-
-}
-#endif /* LWIP_TCPIP_CORE_LOCKING */
 #endif /* LWIP_NETCONN */
 
 #if LWIP_NETIF_API
@@ -359,20 +360,24 @@ tcpip_apimsg_lock(struct api_msg *apimsg)
 err_t
 tcpip_netifapi(struct netifapi_msg* netifapimsg)
 {
-  struct tcpip_msg msg;
-  
+  TCPIP_MSG_VAR_DECLARE(msg);
+
   if (sys_mbox_valid(&mbox)) {
-    err_t err = sys_sem_new(&netifapimsg->msg.sem, 0);
+    err_t err;
+    TCPIP_MSG_VAR_ALLOC(msg);
+
+    err = sys_sem_new(&netifapimsg->msg.sem, 0);
     if (err != ERR_OK) {
       netifapimsg->msg.err = err;
       return err;
     }
     
-    msg.type = TCPIP_MSG_NETIFAPI;
-    msg.msg.netifapimsg = netifapimsg;
-    sys_mbox_post(&mbox, &msg);
+    TCPIP_MSG_VAR_REF(msg).type = TCPIP_MSG_NETIFAPI;
+    TCPIP_MSG_VAR_REF(msg).msg.netifapimsg = netifapimsg;
+    sys_mbox_post(&mbox, &TCPIP_MSG_VAR_REF(msg));
     sys_sem_wait(&netifapimsg->msg.sem);
     sys_sem_free(&netifapimsg->msg.sem);
+    TCPIP_MSG_VAR_FREE(msg);
     return netifapimsg->msg.err;
   }
   return ERR_VAL;
@@ -396,6 +401,56 @@ tcpip_netifapi_lock(struct netifapi_msg* netifapimsg)
 }
 #endif /* !LWIP_TCPIP_CORE_LOCKING */
 #endif /* LWIP_NETIF_API */
+
+#if LWIP_PPP_API
+#if !LWIP_TCPIP_CORE_LOCKING
+/**
+ * Much like tcpip_apimsg, but calls the lower part of a pppapi_*
+ * function.
+ *
+ * @param pppapimsg a struct containing the function to call and its parameters
+ * @return error code given back by the function that was called
+ */
+err_t
+tcpip_pppapi(struct pppapi_msg* pppapimsg)
+{
+  struct tcpip_msg msg;
+
+  if (sys_mbox_valid(&mbox)) {
+    err_t err = sys_sem_new(&pppapimsg->msg.sem, 0);
+    if (err != ERR_OK) {
+      pppapimsg->msg.err = err;
+      return err;
+    }
+
+    msg.type = TCPIP_MSG_PPPAPI;
+    msg.msg.pppapimsg = pppapimsg;
+    sys_mbox_post(&mbox, &msg);
+    sys_sem_wait(&pppapimsg->msg.sem);
+    sys_sem_free(&pppapimsg->msg.sem);
+    return pppapimsg->msg.err;
+  }
+  return ERR_VAL;
+}
+#else /* !LWIP_TCPIP_CORE_LOCKING */
+/**
+ * Call the lower part of a pppapi_* function
+ * This function has exclusive access to lwIP core code by locking it
+ * before the function is called.
+ *
+ * @param pppapimsg a struct containing the function to call and its parameters
+ * @return ERR_OK (only for compatibility fo tcpip_pppapi())
+ */
+err_t
+tcpip_pppapi_lock(struct pppapi_msg* pppapimsg)
+{
+  LOCK_TCPIP_CORE();
+  pppapimsg->function(&(pppapimsg->msg));
+  UNLOCK_TCPIP_CORE();
+  return pppapimsg->msg.err;
+}
+#endif /* !LWIP_TCPIP_CORE_LOCKING */
+#endif /* LWIP_PPP_API */
 
 /**
  * Allocate a structure for a static callback message and initialize it.
