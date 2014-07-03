@@ -1249,6 +1249,8 @@ lwip_netconn_do_writemore(struct netconn *conn)
        (conn->current_msg->msg.w.apiflags & NETCONN_DONTBLOCK);
   apiflags = conn->current_msg->msg.w.apiflags;
 
+  lprintf("dontblock=%d apiflags=%08x\n", (int)dontblock, (uint32_t)apiflags);
+
 #if LWIP_SO_SNDTIMEO
   if ((conn->send_timeout != 0) &&
       ((s32_t)(sys_now() - conn->current_msg->msg.w.time_started) >= conn->send_timeout)) {
@@ -1298,12 +1300,15 @@ lwip_netconn_do_writemore(struct netconn *conn)
     if ((err == ERR_OK) || (err == ERR_MEM)) {
 err_mem:
       if (dontblock && (len < conn->current_msg->msg.w.len)) {
+        lprintf("dontbock && %u < %u\n", len, conn->current_msg->msg.w.len);
         /* non-blocking write did not write everything: mark the pcb non-writable
            and let poll_tcp check writable space to mark the pcb writable again */
         API_EVENT(conn, NETCONN_EVT_SENDMINUS, len);
         conn->flags |= NETCONN_FLAG_CHECK_WRITESPACE;
       } else if ((tcp_sndbuf(conn->pcb.tcp) <= TCP_SNDLOWAT) ||
                  (tcp_sndqueuelen(conn->pcb.tcp) >= TCP_SNDQUEUELOWAT)) {
+
+        lprintf(" tcp_sndbuf=%d tcp_sndqueuelen=%d\n", tcp_sndbuf(conn->pcb.tcp), tcp_sndqueuelen(conn->pcb.tcp));
         /* The queued byte- or pbuf-count exceeds the configured low-water limit,
            let select mark this pcb as non-writable. */
         API_EVENT(conn, NETCONN_EVT_SENDMINUS, len);
@@ -1319,6 +1324,7 @@ err_mem:
         write_finished = 1;
         conn->write_offset = 0;
       }
+      lprintf(" ERR_OK - tcp_output\n");
       tcp_output(conn->pcb.tcp);
     } else if ((err == ERR_MEM) && !dontblock) {
       /* If ERR_MEM, we wait for sent_tcp or poll_tcp to be called
@@ -1326,6 +1332,7 @@ err_mem:
          only a temporary error! */
 
       /* tcp_write returned ERR_MEM, try tcp_output anyway */
+      lprintf(" ERR_MEM - try tcp_output anyway\n");
       tcp_output(conn->pcb.tcp);
 
 #if LWIP_TCPIP_CORE_LOCKING
@@ -1336,6 +1343,7 @@ err_mem:
          the error to the application thread. */
       write_finished = 1;
       conn->current_msg->msg.w.len = 0;
+      lprintf("error other than errors != ERR_MEM\n");
     }
   }
   if (write_finished) {
@@ -1348,6 +1356,7 @@ err_mem:
     if ((conn->flags & NETCONN_FLAG_WRITE_DELAYED) != 0)
 #endif
     {
+      lprintf("write_finished - signaling\n.");
       sys_sem_signal(&conn->op_completed);
     }
   }
@@ -1355,6 +1364,7 @@ err_mem:
   else
     return ERR_MEM;
 #endif
+  lprintf("do_writemore done=%d\n", ERR_OK);
   return ERR_OK;
 }
 #endif /* LWIP_TCP */
