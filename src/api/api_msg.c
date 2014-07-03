@@ -1255,6 +1255,7 @@ lwip_netconn_do_writemore(struct netconn *conn)
   if ((conn->send_timeout != 0) &&
       ((s32_t)(sys_now() - conn->current_msg->msg.w.time_started) >= conn->send_timeout)) {
     write_finished = 1;
+    lprintf("send_timeout=%d sys_now=%u time_started=%u\n",conn->send_timeout, sys_now(), conn->current_msg->msg.w.time_started);
     if (conn->write_offset == 0) {
       /* nothing has been written */
       err = ERR_WOULDBLOCK;
@@ -1279,6 +1280,7 @@ lwip_netconn_do_writemore(struct netconn *conn)
       len = (u16_t)diff;
     }
     available = tcp_sndbuf(conn->pcb.tcp);
+    lprintf("available %u < len %u\n", available, len);
     if (available < len) {
       /* don't try to write more than sendbuf */
       len = available;
@@ -1324,7 +1326,7 @@ err_mem:
         write_finished = 1;
         conn->write_offset = 0;
       }
-      lprintf(" ERR_OK - tcp_output\n");
+      lprintf(" ERR_OK - tcp_output... write_finished=%d\n", write_finished);
       tcp_output(conn->pcb.tcp);
     } else if ((err == ERR_MEM) && !dontblock) {
       /* If ERR_MEM, we wait for sent_tcp or poll_tcp to be called
@@ -1332,7 +1334,7 @@ err_mem:
          only a temporary error! */
 
       /* tcp_write returned ERR_MEM, try tcp_output anyway */
-      lprintf(" ERR_MEM - try tcp_output anyway\n");
+      lprintf(" ERR_MEM - try tcp_output anyway... write_finished=%d\n", write_finished);
       tcp_output(conn->pcb.tcp);
 
 #if LWIP_TCPIP_CORE_LOCKING
@@ -1343,7 +1345,7 @@ err_mem:
          the error to the application thread. */
       write_finished = 1;
       conn->current_msg->msg.w.len = 0;
-      lprintf("error other than errors != ERR_MEM\n");
+      lprintf("error other than errors != ERR_MEM.... write_finished=%d\n", write_finished);
     }
   }
   if (write_finished) {
@@ -1364,7 +1366,7 @@ err_mem:
   else
     return ERR_MEM;
 #endif
-  lprintf("do_writemore done=%d\n", ERR_OK);
+  lprintf("do_writemore done...write_finished=%d return=%d\n", write_finished, ERR_OK);
   return ERR_OK;
 }
 #endif /* LWIP_TCP */
