@@ -440,6 +440,10 @@ memp_malloc_fn(memp_t type, const char* file, const int line)
 
   SYS_ARCH_UNPROTECT(old_level);
 
+  if ( memp && (type==MEMP_TCP_PCB) ) {
+    LWIP_DEBUGF(MEMP_DEBUG, ("memp_malloc: tcb_pcb=%p\n", memp));
+  }
+
   return memp;
 }
 
@@ -453,6 +457,11 @@ void
 memp_free(memp_t type, void *mem)
 {
   struct memp *memp;
+
+  if (type==MEMP_TCP_PCB) {
+    LWIP_DEBUGF(MEMP_DEBUG, ("memp_free: tcb_pcb=%p\n", mem));
+  }
+
   SYS_ARCH_DECL_PROTECT(old_level);
 
   if (mem == NULL) {

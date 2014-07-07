@@ -341,8 +341,10 @@ tcpip_apimsg(struct api_msg *apimsg)
     sys_mbox_post(&mbox, &TCPIP_MSG_VAR_REF(msg));
     sys_arch_sem_wait(&apimsg->msg.conn->op_completed, 0);
     TCPIP_MSG_VAR_FREE(msg);
+    lprintf("returning apimsg->msg.err=%d\n",apimsg->msg.err);
     return apimsg->msg.err;
   }
+  lprintf( "returning ERRVAL\n");
   return ERR_VAL;
 }
 

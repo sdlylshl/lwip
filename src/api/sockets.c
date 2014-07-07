@@ -823,6 +823,9 @@ lwip_send(int s, const void *data, size_t size, int flags)
     return -1;
   }
 
+  LWIP_DEBUGF(SOCKETS_DEBUG, ("lwip_send(%d, data=%p, size=%"SZT_F", flags=0x%x sock->conn->type=0x%0x)\n",
+                              s, data, size, flags, sock->conn->type));
+
   if (NETCONNTYPE_GROUP(netconn_type(sock->conn)) != NETCONN_TCP) {
 #if (LWIP_UDP || LWIP_RAW)
     return lwip_sendto(s, data, size, flags, NULL, 0);
@@ -837,8 +840,11 @@ lwip_send(int s, const void *data, size_t size, int flags)
     ((flags & MSG_DONTWAIT) ? NETCONN_DONTBLOCK : 0);
   written = 0;
   err = netconn_write_partly(sock->conn, data, size, write_flags, &written);
-
+#if 1
+  LWIP_DEBUGF(SOCKETS_DEBUG, ("lwip_send(%d) err=%d written=%u\n", s, err, written));
+#else
   LWIP_DEBUGF(SOCKETS_DEBUG, ("lwip_send(%d) err=%d written=%"SZT_F"\n", s, err, written));
+#endif
   sock_set_errno(sock, err_to_errno(err));
   return (err == ERR_OK ? (int)written : -1);
 }

@@ -40,6 +40,8 @@
  *
  */
 
+#define XYZZY_DEBUG_TCP 1
+
 #include "lwip/opt.h"
 
 #if LWIP_TCP /* don't build if not configured for use in lwipopts.h */
@@ -371,6 +373,8 @@ tcp_abandon(struct tcp_pcb *pcb, int reset)
   /* Figure out on which TCP PCB list we are, and remove us. If we
      are in an active state, call the receive function associated with
      the PCB with a NULL argument, and send an RST to the remote end. */
+
+  LWIP_DEBUGF(TCP_DEBUG, ("tcp_abandon: tcp_psb=%p\n",pcb));
   if (pcb->state == TIME_WAIT) {
     tcp_pcb_remove(&tcp_tw_pcbs, pcb);
     memp_free(MEMP_TCP_PCB, pcb);
@@ -1301,6 +1305,10 @@ tcp_kill_prio(u8_t prio)
   inactivity = 0;
   inactive = NULL;
   for(pcb = tcp_active_pcbs; pcb != NULL; pcb = pcb->next) {
+#if XYZZY_DEBUG_TCP
+    LWIP_DEBUGF(TCP_DEBUG, ("tcp_kill_prio: looking at TIME-WAIT PCB %p pcb->tmr=%"S32_F" tcp_ticks=%"S32_F"\n",
+           (void *)pcb, pcb->tmr,tcp_ticks));
+#endif
     if (pcb->prio <= prio &&
        pcb->prio <= mprio &&
        (u32_t)(tcp_ticks - pcb->tmr) >= inactivity) {
@@ -1330,6 +1338,10 @@ tcp_kill_timewait(void)
   inactive = NULL;
   /* Go through the list of TIME_WAIT pcbs and get the oldest pcb. */
   for(pcb = tcp_tw_pcbs; pcb != NULL; pcb = pcb->next) {
+#if XYZZY_DEBUG_TCP
+    LWIP_DEBUGF(TCP_DEBUG, ("tcp_kill_timewait: looking at TIME-WAIT PCB %p tcp_ticks=%u pcb->tmr=%"S32_F"\n",
+           (void *)pcb, tcp_ticks, pcb->tmr));
+#endif
     if ((u32_t)(tcp_ticks - pcb->tmr) >= inactivity) {
       inactivity = tcp_ticks - pcb->tmr;
       inactive = pcb;
@@ -1337,6 +1349,47 @@ tcp_kill_timewait(void)
   }
   if (inactive != NULL) {
     LWIP_DEBUGF(TCP_DEBUG, ("tcp_kill_timewait: killing oldest TIME-WAIT PCB %p (%"S32_F")\n",
+           (void *)inactive, inactivity));
+    tcp_abort(inactive);
+  }
+}
+
+/**
+ * Kills the oldest connection that is in TIME_WAIT state that has the same or lower priority than
+ * 'prio'.
+ *
+ * Called from tcp_alloc() if no more connections are available.
+ *
+ * @param prio minimum priority
+ *
+ */
+static void
+tcp_kill_timewait_prio(u8_t prio)
+{
+  struct tcp_pcb *pcb, *inactive;
+  u32_t inactivity;
+  u8_t mprio;
+
+  mprio = TCP_PRIO_MAX;
+
+  inactivity = 0;
+  inactive = NULL;
+  /* Go through the list of TIME_WAIT pcbs and get the oldest pcb that is less than or equal to prio. */
+  for(pcb = tcp_tw_pcbs; pcb != NULL; pcb = pcb->next) {
+#if XYZZY_DEBUG_TCP
+    LWIP_DEBUGF(TCP_DEBUG, ("tcp_kill_timewait_prio: looking at TIME-WAIT PCB %p pcb->tmr=%"S32_F" tcp_ticks=%"S32_F" pcb->prio=%u prio=%u local_port=%u remote_port=%u\n",
+           (void *)pcb, pcb->tmr, tcp_ticks, (u32_t)pcb->prio, (u32_t)prio, (u32_t)pcb->local_port, (u32_t)pcb->remote_port));
+#endif
+    if (pcb->prio <= prio &&
+       pcb->prio <= mprio &&
+       (u32_t)(tcp_ticks - pcb->tmr) >= inactivity) {
+      inactivity = tcp_ticks - pcb->tmr;
+      inactive = pcb;
+      mprio = pcb->prio;
+    }
+  }
+  if (inactive != NULL) {
+    LWIP_DEBUGF(TCP_DEBUG, ("tcp_kill_timewait_prio: killing oldest TIME-WAIT PCB %p (%"S32_F")\n",
            (void *)inactive, inactivity));
     tcp_abort(inactive);
   }
@@ -1356,6 +1409,63 @@ tcp_alloc(u8_t prio)
   
   pcb = (struct tcp_pcb *)memp_malloc(MEMP_TCP_PCB);
   if (pcb == NULL) {
+#if 0
+    /* XYZZY TBDRMS kill on a priority order before killing on a straight time wait order */
+    /* Try killing active connections with lower priority than the new one. */
+    LWIP_DEBUGF(TCP_DEBUG, ("tcp_alloc: killing connection with prio lower than %d\n", prio));
+    tcp_kill_prio(prio);
+    /* Try to allocate a tcp_pcb again. */
+    pcb = (struct tcp_pcb *)memp_malloc(MEMP_TCP_PCB);
+    if (pcb == NULL) {
+      /* Try killing oldest connection in TIME-WAIT. */
+      LWIP_DEBUGF(SOCKETS_DEBUG, ("lwip_send(%d) err=%d written=%"SZT_F"\n", s, err, written));
+      tcp_kill_timewait();
+      /* Try to allocate a tcp_pcb again. */
+      pcb = (struct tcp_pcb *)memp_malloc(MEMP_TCP_PCB);
+      /* TBDRMS why are we decrementing the the error stats here? */
+      if (pcb != NULL) {
+        /* adjust err stats: memp_malloc failed twice before */
+        MEMP_STATS_DEC(err, MEMP_TCP_PCB);
+      }
+    }
+    if (pcb != NULL) {
+      /* adjust err stats: timewait PCB was freed above */
+      MEMP_STATS_DEC(err, MEMP_TCP_PCB);
+    }
+#elif 1
+    /* Try killing oldest connection in TIME-WAIT with lower priority than the new onw. */
+    LWIP_DEBUGF(TCP_DEBUG, ("tcp_alloc: killing off oldest TIME-WAIT connection\n"));
+    tcp_kill_timewait_prio(prio);
+    /* Try to allocate a tcp_pcb again. */
+    pcb = (struct tcp_pcb *)memp_malloc(MEMP_TCP_PCB);
+    if (pcb == NULL) {
+      /* Try killing oldest connection in TIME-WAIT. */
+      LWIP_DEBUGF(TCP_DEBUG, ("tcp_alloc: killing off oldest TIME-WAIT connection\n"));
+      tcp_kill_timewait();
+      /* Try to allocate a tcp_pcb again. */
+      pcb = (struct tcp_pcb *)memp_malloc(MEMP_TCP_PCB);
+      if (pcb == NULL) {
+        /* Try killing active connections with lower priority than the new one. */
+        LWIP_DEBUGF(TCP_DEBUG, ("tcp_alloc: killing connection with prio lower than %d\n", prio));
+        tcp_kill_prio(prio);
+        /* Try to allocate a tcp_pcb again. */
+        pcb = (struct tcp_pcb *)memp_malloc(MEMP_TCP_PCB);
+        if (pcb != NULL) {
+          /* adjust err stats: memp_malloc failed three times before */
+          MEMP_STATS_DEC(err, MEMP_TCP_PCB);
+        }
+      }
+      if (pcb != NULL) {
+        /* adjust err stats: timewait PCB was freed above */
+        MEMP_STATS_DEC(err, MEMP_TCP_PCB);
+      }
+    }
+    if (pcb != NULL) {
+      /* adjust err stats: timewait PCB was freed above */
+      MEMP_STATS_DEC(err, MEMP_TCP_PCB);
+    }
+
+#else
     /* Try killing oldest connection in TIME-WAIT. */
     LWIP_DEBUGF(TCP_DEBUG, ("tcp_alloc: killing off oldest TIME-WAIT connection\n"));
     tcp_kill_timewait();
@@ -1376,8 +1486,11 @@ tcp_alloc(u8_t prio)
       /* adjust err stats: timewait PCB was freed above */
       MEMP_STATS_DEC(err, MEMP_TCP_PCB);
     }
+#endif
   }
   if (pcb != NULL) {
+    LWIP_DEBUGF(TCP_DEBUG, ("tcp_alloc: allocated PCB %p tcp_ticks="S32_F"\n",
+           pcb, tcp_ticks));
     memset(pcb, 0, sizeof(struct tcp_pcb));
     pcb->prio = prio;
     pcb->snd_buf = TCP_SND_BUF;
