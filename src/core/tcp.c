@@ -1353,7 +1353,7 @@ tcp_kill_timewait(void)
     tcp_abort(inactive);
   }
 }
-
+#if 0
 /**
  * Kills the oldest connection that is in TIME_WAIT state that has the same or lower priority than
  * 'prio'.
@@ -1394,6 +1394,7 @@ tcp_kill_timewait_prio(u8_t prio)
     tcp_abort(inactive);
   }
 }
+#endif
 
 /**
  * Allocate a new tcp_pcb structure.
@@ -1432,7 +1433,7 @@ tcp_alloc(u8_t prio)
       /* adjust err stats: timewait PCB was freed above */
       MEMP_STATS_DEC(err, MEMP_TCP_PCB);
     }
-#elif 1
+#elif 0
     /* Try killing oldest connection in TIME-WAIT with lower priority than the new onw. */
     LWIP_DEBUGF(TCP_DEBUG, ("tcp_alloc: killing off oldest TIME-WAIT connection\n"));
     tcp_kill_timewait_prio(prio);

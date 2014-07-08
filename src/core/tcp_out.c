@@ -959,6 +959,8 @@ tcp_output(struct tcp_pcb *pcb)
 
   seg = pcb->unsent;
 
+  lprintf("tcp_output: seg=%p %u > % u\n", seg, ntohl(seg->tcphdr->seqno) - pcb->lastack + seg->len, wnd);
+
   /* If the TF_ACK_NOW flag is set and no data will be sent (either
    * because the ->unsent queue is empty or because the window does
    * not allow it), construct an empty ACK segment and send it.
@@ -968,6 +970,7 @@ tcp_output(struct tcp_pcb *pcb)
   if (pcb->flags & TF_ACK_NOW &&
      (seg == NULL ||
       ntohl(seg->tcphdr->seqno) - pcb->lastack + seg->len > wnd)) {
+      lstr("return tcp_send_empt_ack\n");
      return tcp_send_empty_ack(pcb);
   }
 
@@ -976,6 +979,7 @@ tcp_output(struct tcp_pcb *pcb)
   if (useg != NULL) {
     for (; useg->next != NULL; useg = useg->next);
   }
+  lprintf("pcb->unacked=%p, useg=%p\n", pcb->unacked, useg);
 
 #if TCP_OUTPUT_DEBUG
   if (seg == NULL) {
@@ -1012,6 +1016,7 @@ tcp_output(struct tcp_pcb *pcb)
      */
     if((tcp_do_output_nagle(pcb) == 0) &&
       ((pcb->flags & (TF_NAGLEMEMERR | TF_FIN)) == 0)){
+      lprintf("tcp_do_output_nagle(pcb)=%d pcb->flags=%08x (pcb->flags & (TF_NAGLEMEMERR | TF_FIN)=%08x\n", tcp_do_output_nagle(pcb), pcb->flags, (pcb->flags & (TF_NAGLEMEMERR | TF_FIN) ) );
       break;
     }
 #if TCP_CWND_DEBUG
@@ -1156,6 +1161,7 @@ tcp_output_segment(struct tcp_seg *seg, struct tcp_pcb *pcb)
     ipX_addr_t *local_ip;
     ipX_route_get_local_ipX(PCB_ISIPV6(pcb), &pcb->local_ip, &pcb->remote_ip, netif, local_ip);
     if ((netif == NULL) || (local_ip == NULL)) {
+      lstr("tcp_output_segment: returning - no local ip addr\n");
       return;
     }
     ipX_addr_copy(PCB_ISIPV6(pcb), pcb->local_ip, *local_ip);

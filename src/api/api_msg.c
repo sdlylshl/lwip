@@ -1366,6 +1366,10 @@ err_mem:
   else
     return ERR_MEM;
 #endif
+  else {
+    //__asm volatile( "bkpt #1\n");
+    lprintf("write_finished - NOT SIGNALING\n.");
+  }
   lprintf("do_writemore done...write_finished=%d return=%d\n", write_finished, ERR_OK);
   return ERR_OK;
 }
