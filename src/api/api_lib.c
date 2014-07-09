@@ -683,11 +683,12 @@ netconn_write_partly(struct netconn *conn, const void *dataptr, size_t size,
     API_MSG_VAR_REF(msg).msg.msg.w.time_started = 0;
   }
 
-  lprintf(".conn=%08x dataptr=%08x apiflags=%08x len=%u time_started=%u\n",
-      (uint32_t)msg.msg.conn, (uint32_t)msg.msg.msg.w.dataptr, msg.msg.msg.w.apiflags, msg.msg.msg.w.len, msg.msg.msg.w.time_started);
+  LWIP_DEBUGF(SPINDANCE_DEBUG, (".conn=%08x dataptr=%08x apiflags=%08x len=%u time_started=%u\n",
+      (uint32_t)msg.msg.conn, (uint32_t)msg.msg.msg.w.dataptr, msg.msg.msg.w.apiflags, msg.msg.msg.w.len, msg.msg.msg.w.time_started));
+
 #else
-  lprintf(".conn=%08x dataptr=%08x apiflags=%08x len=%u dontblock=%d\n",
-      (uint32_t)msg.msg.conn, (uint32_t)msg.msg.msg.w.dataptr, msg.msg.msg.w.apiflags, msg.msg.msg.w.len, dontblock);
+  LWIP_DEBUGF(SPINDANCE_DEBUG, (".conn=%08x dataptr=%08x apiflags=%08x len=%u dontblock=%d\n",
+      (uint32_t)msg.msg.conn, (uint32_t)msg.msg.msg.w.dataptr, msg.msg.msg.w.apiflags, msg.msg.msg.w.len, dontblock));
 
 #endif /* LWIP_SO_SNDTIMEO */
 
