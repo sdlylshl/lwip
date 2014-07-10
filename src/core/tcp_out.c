@@ -959,7 +959,7 @@ tcp_output(struct tcp_pcb *pcb)
 
   seg = pcb->unsent;
 
-  lprintf("tcp_output: seg=%p %u > % u\n", seg, ntohl(seg->tcphdr->seqno) - pcb->lastack + seg->len, wnd);
+  LWIP_DEBUGF(SPINDANCE_DEBUG, ("tcp_output: seg=%p %u > % u\n", seg, ntohl(seg->tcphdr->seqno) - pcb->lastack + seg->len, wnd) );
 
   /* If the TF_ACK_NOW flag is set and no data will be sent (either
    * because the ->unsent queue is empty or because the window does
@@ -970,7 +970,7 @@ tcp_output(struct tcp_pcb *pcb)
   if (pcb->flags & TF_ACK_NOW &&
      (seg == NULL ||
       ntohl(seg->tcphdr->seqno) - pcb->lastack + seg->len > wnd)) {
-      lstr("return tcp_send_empt_ack\n");
+      LWIP_DEBUGF(SPINDANCE_DEBUG, ("return tcp_send_empt_ack\n") );
      return tcp_send_empty_ack(pcb);
   }
 
@@ -979,7 +979,7 @@ tcp_output(struct tcp_pcb *pcb)
   if (useg != NULL) {
     for (; useg->next != NULL; useg = useg->next);
   }
-  lprintf("pcb->unacked=%p, useg=%p\n", pcb->unacked, useg);
+  LWIP_DEBUGF(SPINDANCE_DEBUG, ("pcb->unacked=%p, useg=%p\n", pcb->unacked, useg) );
 
 #if TCP_OUTPUT_DEBUG
   if (seg == NULL) {
@@ -994,8 +994,7 @@ tcp_output(struct tcp_pcb *pcb)
                                  ", seg == NULL, ack %"U32_F"\n",
                                  pcb->snd_wnd, pcb->cwnd, wnd, pcb->lastack));
   } else {
-    LWIP_DEBUGF(TCP_CWND_DEBUG, 
-                ("tcp_output: snd_wnd %"TCPWNDSIZE_F", cwnd %"TCPWNDSIZE_F", wnd %"U32_F
+    LWIP_DEBUGF(TCP_CWND_DEBUG, ("tcp_output: snd_wnd %"TCPWNDSIZE_F", cwnd %"TCPWNDSIZE_F", wnd %"U32_F
                  ", effwnd %"U32_F", seq %"U32_F", ack %"U32_F"\n",
                  pcb->snd_wnd, pcb->cwnd, wnd,
                  ntohl(seg->tcphdr->seqno) - pcb->lastack + seg->len,
@@ -1016,7 +1015,7 @@ tcp_output(struct tcp_pcb *pcb)
      */
     if((tcp_do_output_nagle(pcb) == 0) &&
       ((pcb->flags & (TF_NAGLEMEMERR | TF_FIN)) == 0)){
-      lprintf("tcp_do_output_nagle(pcb)=%d pcb->flags=%08x (pcb->flags & (TF_NAGLEMEMERR | TF_FIN)=%08x\n", tcp_do_output_nagle(pcb), pcb->flags, (pcb->flags & (TF_NAGLEMEMERR | TF_FIN) ) );
+      LWIP_DEBUGF(SPINDANCE_DEBUG, ("tcp_do_output_nagle(pcb)=%d pcb->flags=%08x (pcb->flags & (TF_NAGLEMEMERR | TF_FIN)=%08x\n", tcp_do_output_nagle(pcb), pcb->flags, (pcb->flags & (TF_NAGLEMEMERR | TF_FIN) ) ) );
       break;
     }
 #if TCP_CWND_DEBUG
