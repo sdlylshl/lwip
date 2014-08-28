@@ -466,11 +466,15 @@ dns_lookup(const char *name)
 
   /* Walk through name list, return entry if found. If not, return NULL. */
   for (i = 0; i < DNS_TABLE_SIZE; ++i) {
+    if ((dns_table[i].state == DNS_STATE_DONE)) {
+      lprintf("%d %s %08x %u\n",i,dns_table[i].name,dns_table[i].ipaddr.addr,dns_table[i].ttl);
+    }
     if ((dns_table[i].state == DNS_STATE_DONE) &&
         (strcmp(name, dns_table[i].name) == 0)) {
       LWIP_DEBUGF(DNS_DEBUG, ("dns_lookup: \"%s\": found = ", name));
       ip_addr_debug_print(DNS_DEBUG, &(dns_table[i].ipaddr));
       LWIP_DEBUGF(DNS_DEBUG, ("\n"));
+      lprintf("%d %s %08x %u<-FOUND\n",i,dns_table[i].name,dns_table[i].ipaddr.addr,dns_table[i].ttl);
       return ip4_addr_get_u32(&dns_table[i].ipaddr);
     }
   }
