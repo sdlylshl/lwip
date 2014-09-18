@@ -798,6 +798,10 @@ tcp_slowtmr(void)
   ++tcp_ticks;
   ++tcp_timer_ctr;
 
+#if LWIP_TCP_ISS_TICK_MULTIPLIER
+  tcp_next_iss();
+#endif
+
 tcp_slowtmr_start:
   /* Steps through all of the active PCBs. */
   prev = NULL;
@@ -1571,8 +1575,22 @@ u32_t
 tcp_next_iss(void)
 {
   static u32_t iss = 6510;
+
+#if LWIP_TCP_RANDOMIZE_INITIAL_ISS && defined(LWIP_RAND)
+  static int iss_initialized = 0;
+
+  if (!iss_initialized) {
+    iss = LWIP_RAND();
+    iss_initialized = 1;
+  }
+#endif
   
-  iss += tcp_ticks;       /* XXX */
+#if LWIP_TCP_ISS_TICK_MULTIPLIER
+  iss += LWIP_TCP_ISS_TICK_MULTIPLIER;
+#else
+  iss += tcp_ticks;
+#endif
+
   return iss;
 }
 
