@@ -640,6 +640,9 @@ dns_check_entry(u8_t i)
 
   LWIP_ASSERT("array index out of bounds", i < DNS_TABLE_SIZE);
 
+  uint64_t usec = usecSincePowerOn();
+  uint32_t msec = usec/1000;
+
   switch(pEntry->state) {
 
     case DNS_STATE_NEW: {
@@ -649,12 +652,15 @@ dns_check_entry(u8_t i)
       pEntry->tmr     = 1;
       pEntry->retries = 0;
       
+#if 0
       /* send DNS packet for this entry */
       err = dns_send(pEntry->numdns, pEntry->name, i);
       if (err != ERR_OK) {
         LWIP_DEBUGF(DNS_DEBUG | LWIP_DBG_LEVEL_WARNING,
                     ("dns_send returned error: %s\n", lwip_strerr(err)));
       }
+#endif
+      lprintfKnl("DNS_NEW:%u %08x [%s] numdns=%u tmr=%u retries=%d\n", msec, (int)pEntry, pEntry->name, pEntry->numdns, pEntry->tmr, pEntry->retries);
       break;
     }
 
@@ -666,10 +672,12 @@ dns_check_entry(u8_t i)
             pEntry->numdns++;
             pEntry->tmr     = 1;
             pEntry->retries = 0;
+            lprintfKnl("DNS_A-S:%u %08x [%s] numdns=%u tmr=%u retries=%d\n", msec, (int)pEntry, pEntry->name, pEntry->numdns, pEntry->tmr, pEntry->retries);
             break;
           } else {
             LWIP_DEBUGF(DNS_DEBUG, ("dns_check_entry: \"%s\": timeout\n", pEntry->name));
             /* call specified callback function if provided */
+            lprintfKnl("DFOUND:%u %08x [%s] numdns=%u tmr=%u retries=%d\n", msec, (int)pEntry, pEntry->name, pEntry->numdns, pEntry->tmr, pEntry->retries);
             if (pEntry->found)
               (*pEntry->found)(pEntry->name, NULL, pEntry->arg);
             /* flush this entry */
@@ -677,17 +685,24 @@ dns_check_entry(u8_t i)
             pEntry->found   = NULL;
             break;
           }
+        } else {
+          lprintfKnl("DNS_A-R:%u %08x [%s] numdns=%u tmr=%u retries=%d\n", msec, (int)pEntry, pEntry->name, pEntry->numdns, pEntry->tmr, pEntry->retries);
         }
 
         /* wait longer for the next retry */
         pEntry->tmr = pEntry->retries;
 
+        lprintfKnl("DNSEND :%u %08x [%s] numdns=%u tmr=%u retries=%d\n", msec, (int)pEntry, pEntry->name, pEntry->numdns, pEntry->tmr, pEntry->retries);
         /* send DNS packet for this entry */
+        #if 0
         err = dns_send(pEntry->numdns, pEntry->name, i);
         if (err != ERR_OK) {
           LWIP_DEBUGF(DNS_DEBUG | LWIP_DBG_LEVEL_WARNING,
                       ("dns_send returned error: %s\n", lwip_strerr(err)));
         }
+        #endif
+      } else {
+        lprintfKnl("DNS_A-W:%u %08x [%s] numdns=%u tmr=%u retries=%d\n", msec, (int)pEntry, pEntry->name, pEntry->numdns, pEntry->tmr, pEntry->retries);
       }
       break;
     }
@@ -732,6 +747,9 @@ dns_check_entries(void)
 static void
 dns_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, ip_addr_t *addr, u16_t port)
 {
+  uint64_t usec = usecSincePowerOn();
+  uint32_t msec = usec/1000;
+
   u16_t i;
   char *pHostname;
   struct dns_hdr *hdr;
@@ -813,6 +831,8 @@ dns_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, ip_addr_t *addr, u16_t 
             ip_addr_debug_print(DNS_DEBUG, (&(pEntry->ipaddr)));
             LWIP_DEBUGF(DNS_DEBUG, ("\n"));
             /* call specified callback function if provided */
+            lprintfKnl("dns_recv-found:%u %08x [%s] numdns=%u tmr=%u retries=%d\n", msec, (int)pEntry, pEntry->name, pEntry->numdns, pEntry->tmr, pEntry->retries);
+
             if (pEntry->found) {
               (*pEntry->found)(pEntry->name, &pEntry->ipaddr, pEntry->arg);
             }
@@ -834,6 +854,8 @@ dns_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, ip_addr_t *addr, u16_t 
   goto memerr;
 
 responseerr:
+ lprintfKnl("dns_recv-err:%u %08x [%s] numdns=%u tmr=%u retries=%d\n", msec, (int)pEntry, pEntry->name, pEntry->numdns, pEntry->tmr, pEntry->retries);
+
   /* ERROR: call specified callback function with NULL as name to indicate an error */
   if (pEntry->found) {
     (*pEntry->found)(pEntry->name, NULL, pEntry->arg);
