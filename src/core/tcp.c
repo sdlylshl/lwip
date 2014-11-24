@@ -171,33 +171,58 @@ tcp_close_shutdown(struct tcp_pcb *pcb, u8_t rst_on_unacked_data)
 {
   err_t err;
 
+  LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("tcp_close_shutdown pcb=%08x pcb->state=%u pcb->remote_ip=%08x pcb->remote_port=%u\n", pcb, pcb->state, pcb->remote_ip, pcb->remote_port));
   if (rst_on_unacked_data && ((pcb->state == ESTABLISHED) || (pcb->state == CLOSE_WAIT))) {
+
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("tcp_close_shutdown pcb=%08x pcb->refused_data=%08x pcb->rcv_wnd=%u\n", pcb, pcb->refused_data, pcb->rcv_wnd));
     if ((pcb->refused_data != NULL) || (pcb->rcv_wnd != TCP_WND)) {
       /* Not all data received by application, send RST to tell the remote
          side about this. */
       LWIP_ASSERT("pcb->flags & TF_RXCLOSED", pcb->flags & TF_RXCLOSED);
 
+      LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("calling tcp_rst pcb=%08x pcb->snd_nxt=%u pcb->rcv_nxt=%u\n", pcb, pcb->snd_nxt, pcb->rcv_nxt));
       /* don't call tcp_abort here: we must not deallocate the pcb since
          that might not be expected when calling tcp_close */
       tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, &pcb->local_ip, &pcb->remote_ip,
         pcb->local_port, pcb->remote_port);
 
+      LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("calling tcp_pcb_purge\n", pcb));
       tcp_pcb_purge(pcb);
+      LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("calling TCP_RMV_ACTIVE\n", pcb));
       TCP_RMV_ACTIVE(pcb);
       if (pcb->state == ESTABLISHED) {
         /* move to TIME_WAIT since we close actively */
         pcb->state = TIME_WAIT;
+        LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("calling TCP_REG"));
+#if 0
+        // todo rms test this path....
+#define TCP_REG2(pcbs, npcb)                        \
+  do {                                             \
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("beore:pcb->next=%08x *pcbs=%08x\n",(int)((npcb)->next), (int)*pcbs));   \
+    (npcb)->next = *pcbs;                          \
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("after:pcb->next=%08x *pcbs=%08x\n",(int)((npcb)->next), (int)*pcbs));  \
+    *(pcbs) = (npcb);                              \
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("then:pcb->next=%08x *pcbs=%08x\n",(int)((npcb)->next), (int)*pcbs));  \
+    tcp_timer_needed();                            \
+  } while (0)
+
+        TCP_REG2(&tcp_tw_pcbs, pcb);
+#else
         TCP_REG(&tcp_tw_pcbs, pcb);
+#endif
       } else {
         /* CLOSE_WAIT: deallocate the pcb since we already sent a RST for it */
+        LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("memp_free %08x\n", pcb));
         memp_free(MEMP_TCP_PCB, pcb);
       }
       return ERR_OK;
     }
   }
 
+  LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("pcb->state=%u\n", pcb->state));
   switch (pcb->state) {
   case CLOSED:
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("case CLOSED:\n"));
     /* Closing a pcb in the CLOSED state might seem erroneous,
      * however, it is in this state once allocated and as yet unused
      * and the user needs some way to free it should the need arise.
@@ -213,12 +238,14 @@ tcp_close_shutdown(struct tcp_pcb *pcb, u8_t rst_on_unacked_data)
     pcb = NULL;
     break;
   case LISTEN:
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("case LISTEN:\n"));
     err = ERR_OK;
     tcp_pcb_remove(&tcp_listen_pcbs.pcbs, pcb);
     memp_free(MEMP_TCP_PCB_LISTEN, pcb);
     pcb = NULL;
     break;
   case SYN_SENT:
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("case SYN_SENT:\n"));
     err = ERR_OK;
     TCP_PCB_REMOVE_ACTIVE(pcb);
     memp_free(MEMP_TCP_PCB, pcb);
@@ -226,6 +253,7 @@ tcp_close_shutdown(struct tcp_pcb *pcb, u8_t rst_on_unacked_data)
     snmp_inc_tcpattemptfails();
     break;
   case SYN_RCVD:
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("case SYN_RCVD:\n"));
     err = tcp_send_fin(pcb);
     if (err == ERR_OK) {
       snmp_inc_tcpattemptfails();
@@ -233,6 +261,7 @@ tcp_close_shutdown(struct tcp_pcb *pcb, u8_t rst_on_unacked_data)
     }
     break;
   case ESTABLISHED:
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("case ESTABLISHED:\n"));
     err = tcp_send_fin(pcb);
     if (err == ERR_OK) {
       snmp_inc_tcpestabresets();
@@ -240,6 +269,7 @@ tcp_close_shutdown(struct tcp_pcb *pcb, u8_t rst_on_unacked_data)
     }
     break;
   case CLOSE_WAIT:
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("case CLOSE_WAIT:\n"));
     err = tcp_send_fin(pcb);
     if (err == ERR_OK) {
       snmp_inc_tcpestabresets();
@@ -247,6 +277,7 @@ tcp_close_shutdown(struct tcp_pcb *pcb, u8_t rst_on_unacked_data)
     }
     break;
   default:
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("case default:\n"));
     /* Has already been closed, do nothing. */
     err = ERR_OK;
     pcb = NULL;
@@ -262,8 +293,12 @@ tcp_close_shutdown(struct tcp_pcb *pcb, u8_t rst_on_unacked_data)
     /* @todo: When implementing SO_LINGER, this must be changed somehow:
        If SOF_LINGER is set, the data should be sent and acked before close returns.
        This can only be valid for sequential APIs, not for the raw API. */
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("calling tcp_output:%08x\n",pcb));
     tcp_output(pcb);
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("called tcp_output:%08x\n",pcb));
   }
+
+  LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("return err=%d\n", err));
   return err;
 }
 
@@ -963,6 +998,8 @@ tcp_slowtmr_start:
         tcp_active_pcbs = pcb->next;
       }
 
+      // todo rms should we try to close connections here?
+
       if (pcb_reset) {
         tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, &pcb->local_ip, &pcb->remote_ip,
           pcb->local_port, pcb->remote_port);
@@ -1019,6 +1056,9 @@ tcp_slowtmr_start:
 
     /* If the PCB should be removed, do it. */
     if (pcb_remove) {
+
+      // todo rms should we check to see if the pcb needs to be closed here?
+
       struct tcp_pcb *pcb2;
       tcp_pcb_purge(pcb);
       /* Remove PCB from tcp_tw_pcbs list. */

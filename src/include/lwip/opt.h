@@ -2147,4 +2147,11 @@
 #define DNS_DEBUG                       LWIP_DBG_OFF
 #endif
 
+/**
+ * ALII_4573_CLOSE_DEBUG: Enable debugging of ALII-4573 Close Operations.
+ */
+#ifndef ALII_4573_CLOSE_DEBUG
+#define ALII_4573_CLOSE_DEBUG                       LWIP_DBG_OFF
+#endif
+
 #endif /* __LWIP_OPT_H__ */
