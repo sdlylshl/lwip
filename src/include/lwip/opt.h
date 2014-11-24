@@ -2154,4 +2154,31 @@
 #define ALII_4573_CLOSE_DEBUG                       LWIP_DBG_OFF
 #endif
 
+/**
+ * ALII_4573_CLOSE_ALWAYS_RETURNS==1: To force lwip_close and lwip_shutdown
+ * to always return. Otherwise lwIP can be deadlocked when it can not allocate
+ * the buffer space for the FIN to end a message.
+ */
+#ifndef ALII_4573_CLOSE_ALWAYS_RETURNS
+#define ALII_4573_CLOSE_ALWAYS_RETURNS 1
+#endif
+
+/**
+ * ALII_4573_DONT_ADD_FIN_TO_RST==1: When trying to close a connection, if
+ * we have already set the RST flag don't expend the effort to try to allocate
+ * a segment to add a RST. Just hang up quietly.
+ */
+#ifndef ALII_4573_DONT_ADD_FIN_TO_RST
+#define ALII_4573_DONT_ADD_FIN_TO_RST 1
+#endif
+
+/**
+ * ALII_4573_DONT_NAGLE_LIMIT_FIN_QUEUELEN==1: When trying to close a connection,
+ * we just want to get our FIN out. Don't let NAGLE limit that last FIN.
+ */
+#ifndef ALII_4573_DONT_ADD_FIN_TO_RST
+#define ALII_4573_DONT_NAGLE_LIMIT_FIN_QUEUELEN 1
+#endif
+
+
 #endif /* __LWIP_OPT_H__ */
