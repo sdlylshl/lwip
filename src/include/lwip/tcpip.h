@@ -64,11 +64,23 @@ static inline void conn_op_wait(struct netconn *conn)
   #endif
 }
 
-static inline void conn_op_completed(struct netconn *conn)
+static inline void conn_mark_op_started(struct netconn *conn)
+{
+  #if LWIP_PCB_COMPLETED_BOOKKEEPING_DEBUG
+    conn->to_be_completed = 1;
+  #endif
+}
+
+static inline void conn_mark_op_completed(struct netconn *conn)
 {
   #if LWIP_PCB_COMPLETED_BOOKKEEPING_DEBUG
     conn->to_be_completed = 0;
   #endif
+}
+
+static inline void conn_op_completed(struct netconn *conn)
+{
+  conn_mark_op_completed(conn);
   sys_sem_signal(&conn->op_completed);
 }
 /** todo conn_op_completed and tcpip_api_ack_fn are different because it replicates the
@@ -76,9 +88,7 @@ static inline void conn_op_completed(struct netconn *conn)
  */
 static inline void tcpip_apimsg_ack_fn(struct api_msg_msg *msg)
 {
-  #if LWIP_PCB_COMPLETED_BOOKKEEPING_DEBUG
-    msg->conn->to_be_completed = 0;
-  #endif
+  conn_mark_op_completed(msg->conn);
   #if !LWIP_TCPIP_CORE_LOCKING
     sys_sem_signal(&msg->conn->op_completed);
   #endif
