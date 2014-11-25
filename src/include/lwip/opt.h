@@ -2183,7 +2183,7 @@
 
 /**
  * LWIP should keep track of calling threads that are waiting on
- * a call back end return an error to threads that are waiting when the
+ * a call back and return an error to threads that are waiting when the
  * pcb is purged.
  */
 #ifndef LWIP_PCB_COMPLETED_BOOKKEEPING
