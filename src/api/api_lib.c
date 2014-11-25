@@ -111,17 +111,12 @@ netconn_delete(struct netconn *conn)
 
   msg.function = do_delconn;
   msg.msg.conn = conn;
-  err_t err = tcpip_apimsg(&msg);
+  tcpip_apimsg(&msg);
 
   netconn_free(conn);
 
-  #if defined ALII_4573_CLOSE_ALWAYS_RETURNS && ALII_4573_CLOSE_ALWAYS_RETURNS
-    return err;
-  #else
-    (err)
-    /* don't care for return value of do_delconn since it only calls void functions */
-    return ERR_OK;
-  #endif
+  /* don't care for return value of do_delconn since it only calls void functions */
+  return ERR_OK;
 }
 
 /**
