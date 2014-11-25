@@ -91,6 +91,7 @@ tcpip_thread(void *arg)
 #if LWIP_NETCONN
     case TCPIP_MSG_API:
       LWIP_DEBUGF(TCPIP_DEBUG, ("tcpip_thread: API message %p\n", (void *)msg));
+      conn_mark_op_started(msg->msg.apimsg->msg.conn);
       msg->msg.apimsg->function(&(msg->msg.apimsg->msg));
       break;
 #endif /* LWIP_NETCONN */
@@ -315,7 +316,7 @@ tcpip_apimsg(struct api_msg *apimsg)
     msg.type = TCPIP_MSG_API;
     msg.msg.apimsg = apimsg;
     sys_mbox_post(&mbox, &msg);
-    sys_arch_sem_wait(&apimsg->msg.conn->op_completed, 0);
+    conn_op_wait(apimsg->msg.conn);
     return apimsg->msg.err;
   }
   return ERR_VAL;

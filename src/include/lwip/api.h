@@ -147,6 +147,10 @@ struct netconn {
   err_t last_err;
   /** sem that is used to synchroneously execute functions in the core context */
   sys_sem_t op_completed;
+#if LWIP_PCB_COMPLETED_BOOKKEEPING
+  /** we need to respond back to the application to complete the op */
+  u8_t to_be_completed;
+#endif
   /** mbox where received packets are stored until they are fetched
       by the netconn application thread (can grow quite big) */
   sys_mbox_t recvmbox;
