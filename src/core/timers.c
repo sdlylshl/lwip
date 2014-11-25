@@ -104,6 +104,7 @@ tcp_timer_needed(void)
   if (!tcpip_tcp_timer_active && (tcp_active_pcbs || tcp_tw_pcbs)) {
     /* enable and start timer */
     tcpip_tcp_timer_active = 1;
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("tcp_timer_needed calling sys_timeout\n"));
     sys_timeout(TCP_TMR_INTERVAL, tcpip_tcp_timer, NULL);
   }
 }
