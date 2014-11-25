@@ -118,7 +118,7 @@ netconn_delete(struct netconn *conn)
   #if defined ALII_4573_CLOSE_ALWAYS_RETURNS && ALII_4573_CLOSE_ALWAYS_RETURNS
     return err;
   #else
-    (err)
+    (err);
     /* don't care for return value of do_delconn since it only calls void functions */
     return ERR_OK;
   #endif
