@@ -54,20 +54,60 @@ extern "C" {
 #define LWIP_TCPIP_THREAD_ALIVE()
 #endif
 
+static inline void conn_op_wait(struct netconn *conn)
+{
+  sys_arch_sem_wait(&conn->op_completed, 0);
+  #if LWIP_PCB_COMPLETED_BOOKKEEPING
+    if (conn->to_be_completed) {
+      LWIP_DEBUGF(LWIP_PCB_COMPLETED_BOOKKEEPING_DEBUG, ("error:to_be_completed=%"U32_F"\n",(u32_t)conn->to_be_completed));
+    }
+  #endif
+}
+
+static inline void conn_mark_op_started(struct netconn *conn)
+{
+  #if LWIP_PCB_COMPLETED_BOOKKEEPING_DEBUG
+    conn->to_be_completed = 1;
+  #endif
+}
+
+static inline void conn_mark_op_completed(struct netconn *conn)
+{
+  #if LWIP_PCB_COMPLETED_BOOKKEEPING_DEBUG
+    conn->to_be_completed = 0;
+  #endif
+}
+
+static inline void conn_op_completed(struct netconn *conn)
+{
+  conn_mark_op_completed(conn);
+  sys_sem_signal(&conn->op_completed);
+}
+/** todo conn_op_completed and tcpip_api_ack_fn are different because it replicates the
+ * existing code. Maybe the existing code was wrong.
+ */
+static inline void tcpip_apimsg_ack_fn(struct api_msg_msg *msg)
+{
+  conn_mark_op_completed(msg->conn);
+  #if !LWIP_TCPIP_CORE_LOCKING
+    sys_sem_signal(&msg->conn->op_completed);
+  #endif
+}
+
 #if LWIP_TCPIP_CORE_LOCKING
 /** The global semaphore to lock the stack. */
 extern sys_mutex_t lock_tcpip_core;
 #define LOCK_TCPIP_CORE()     sys_mutex_lock(&lock_tcpip_core)
 #define UNLOCK_TCPIP_CORE()   sys_mutex_unlock(&lock_tcpip_core)
 #define TCPIP_APIMSG(m)       tcpip_apimsg_lock(m)
-#define TCPIP_APIMSG_ACK(m)
+#define TCPIP_APIMSG_ACK(m)   tcpip_apimsg_ack_fn(m)
 #define TCPIP_NETIFAPI(m)     tcpip_netifapi_lock(m)
 #define TCPIP_NETIFAPI_ACK(m)
 #else /* LWIP_TCPIP_CORE_LOCKING */
 #define LOCK_TCPIP_CORE()
 #define UNLOCK_TCPIP_CORE()
 #define TCPIP_APIMSG(m)       tcpip_apimsg(m)
-#define TCPIP_APIMSG_ACK(m)   sys_sem_signal(&m->conn->op_completed)
+#define TCPIP_APIMSG_ACK(m)   tcpip_apimsg_ack_fn(m)
 #define TCPIP_NETIFAPI(m)     tcpip_netifapi(m)
 #define TCPIP_NETIFAPI_ACK(m) sys_sem_signal(&m->sem)
 #endif /* LWIP_TCPIP_CORE_LOCKING */

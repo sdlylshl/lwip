@@ -396,8 +396,27 @@ err_tcp(void *arg, err_t err)
       conn->current_msg->err = err;
       conn->current_msg = NULL;
       /* wake up the waiting task */
-      sys_sem_signal(&conn->op_completed);
+      conn_op_completed(conn);
     }
+#if 1
+    else if (conn->to_be_completed) {
+      SET_NONBLOCKING_CONNECT(conn, 0);
+      /* set error return code */
+      LWIP_ASSERT("conn->current_msg != NULL", conn->current_msg != NULL);
+      conn->current_msg->err = err;
+      conn->current_msg = NULL;
+      /* wake up the waiting task */
+      conn_op_completed(conn);
+    }
+  } else if (conn->to_be_completed) {
+    SET_NONBLOCKING_CONNECT(conn, 0);
+    /* set error return code */
+    LWIP_ASSERT("conn->current_msg != NULL", conn->current_msg != NULL);
+    conn->current_msg->err = err;
+    conn->current_msg = NULL;
+    /* wake up the waiting task */
+    conn_op_completed(conn);
+#endif
   } else {
     LWIP_ASSERT("conn->current_msg == NULL", conn->current_msg == NULL);
   }
@@ -816,7 +835,7 @@ do_close_internal(struct netconn *conn)
     }
     /* wake up the application task */
     LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("wake up the application task conn=%08x conn->pcb.tcp=%08x NETCONN_EVT_SENDPLUS\n", conn, conn->pcb.tcp));
-    sys_sem_signal(&conn->op_completed);
+    conn_op_completed(conn);
   } else {
     /* Closing failed, restore some of the callbacks */
     /* Closing of listen pcb will never fail! */
@@ -895,7 +914,7 @@ do_delconn(struct api_msg_msg *msg)
     API_EVENT(msg->conn, NETCONN_EVT_SENDPLUS, 0);
   }
   if (sys_sem_valid(&msg->conn->op_completed)) {
-    sys_sem_signal(&msg->conn->op_completed);
+    conn_op_completed(msg->conn);
   }
 }
 
@@ -979,7 +998,7 @@ do_connected(void *arg, struct tcp_pcb *pcb, err_t err)
   API_EVENT(conn, NETCONN_EVT_SENDPLUS, 0);
 
   if (was_blocking) {
-    sys_sem_signal(&conn->op_completed);
+    conn_op_completed(conn);
   }
   return ERR_OK;
 }
@@ -1040,7 +1059,7 @@ do_connect(struct api_msg_msg *msg)
     break;
     }
   }
-  sys_sem_signal(&msg->conn->op_completed);
+  conn_op_completed(msg->conn);
 }
 
 /**
@@ -1334,7 +1353,7 @@ err_mem:
     if ((conn->flags & NETCONN_FLAG_WRITE_DELAYED) != 0)
 #endif
     {
-      sys_sem_signal(&conn->op_completed);
+      conn_op_completed(conn);
     }
   }
 #if LWIP_TCPIP_CORE_LOCKING
@@ -1498,7 +1517,7 @@ do_close(struct api_msg_msg *msg)
     msg->err = ERR_VAL;
   }
   LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("do_close sys_sem_signal\n"));
-  sys_sem_signal(&msg->conn->op_completed);
+  conn_op_completed(msg->conn);
 }
 
 #if LWIP_IGMP

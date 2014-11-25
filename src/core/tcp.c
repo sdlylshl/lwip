@@ -998,8 +998,6 @@ tcp_slowtmr_start:
         tcp_active_pcbs = pcb->next;
       }
 
-      // todo rms should we try to close connections here?
-
       if (pcb_reset) {
         tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, &pcb->local_ip, &pcb->remote_ip,
           pcb->local_port, pcb->remote_port);
@@ -1056,9 +1054,6 @@ tcp_slowtmr_start:
 
     /* If the PCB should be removed, do it. */
     if (pcb_remove) {
-
-      // todo rms should we check to see if the pcb needs to be closed here?
-
       struct tcp_pcb *pcb2;
       tcp_pcb_purge(pcb);
       /* Remove PCB from tcp_tw_pcbs list. */
@@ -1070,9 +1065,12 @@ tcp_slowtmr_start:
         LWIP_ASSERT("tcp_slowtmr: first pcb == tcp_tw_pcbs", tcp_tw_pcbs == pcb);
         tcp_tw_pcbs = pcb->next;
       }
+      tcp_err_fn err_fn = pcb->errf;
+      void *err_arg = pcb->callback_arg;
       pcb2 = pcb;
       pcb = pcb->next;
       memp_free(MEMP_TCP_PCB, pcb2);
+      TCP_EVENT_ERR(err_fn, err_arg, ERR_ABRT);
     } else {
       prev = pcb;
       pcb = pcb->next;

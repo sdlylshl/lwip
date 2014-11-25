@@ -2181,4 +2181,22 @@
 #endif
 
 
+/**
+ * LWIP should keep track of calling threads that are waiting on
+ * a call back and return an error to threads that are waiting when the
+ * pcb is purged.
+ */
+#ifndef LWIP_PCB_COMPLETED_BOOKKEEPING
+#define LWIP_PCB_COMPLETED_BOOKKEEPING 1
+#endif
+
+/**
+ * LWIP_PCB_COMPLETED_BOOKEEPING: Enable debugging for PCB completed book.
+ */
+#ifndef LWIP_PCB_COMPLETED_BOOKKEEPING_DEBUG
+#define LWIP_PCB_COMPLETED_BOOKKEEPING_DEBUG                       LWIP_DBG_OFF
+#endif
+
+
+
 #endif /* __LWIP_OPT_H__ */
