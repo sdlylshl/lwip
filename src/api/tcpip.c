@@ -314,8 +314,11 @@ tcpip_apimsg(struct api_msg *apimsg)
   if (sys_mbox_valid(&mbox)) {
     msg.type = TCPIP_MSG_API;
     msg.msg.apimsg = apimsg;
+    #if LWIP_PCB_COMPLETED_BOOKKEEPING
+      apimsg->msg.conn->to_be_completed = 1;
+    #endif
     sys_mbox_post(&mbox, &msg);
-    sys_arch_sem_wait(&apimsg->msg.conn->op_completed, 0);
+    conn_op_wait(apimsg->msg.conn);
     return apimsg->msg.err;
   }
   return ERR_VAL;

@@ -1863,7 +1863,7 @@ lwip_getsockopt_internal(void *arg)
     LWIP_ASSERT("unhandled level", 0);
     break;
   } /* switch (level) */
-  sys_sem_signal(&sock->conn->op_completed);
+  conn_op_completed(sock->conn);
 }
 
 int
@@ -2067,7 +2067,7 @@ lwip_setsockopt(int s, int level, int optname, const void *optval, socklen_t opt
   data.optlen = &optlen;
   data.err = err;
   tcpip_callback(lwip_setsockopt_internal, &data);
-  sys_arch_sem_wait(&sock->conn->op_completed, 0);
+  conn_op_wait(sock->conn);
   /* maybe lwip_setsockopt_internal has changed err */
   err = data.err;
 
@@ -2281,7 +2281,7 @@ lwip_setsockopt_internal(void *arg)
     LWIP_ASSERT("unhandled level", 0);
     break;
   }  /* switch (level) */
-  sys_sem_signal(&sock->conn->op_completed);
+  conn_op_completed(sock->conn);
 }
 
 int
