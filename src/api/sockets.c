@@ -460,11 +460,18 @@ lwip_close(int s)
     LWIP_ASSERT("sock->lastdata == NULL", sock->lastdata == NULL);
   }
 
-  netconn_delete(sock->conn);
+  int result = netconn_delete(sock->conn);
 
   free_socket(sock, is_tcp);
-  set_errno(0);
-  return 0;
+
+  #if defined ALII_4573_CLOSE_ALWAYS_RETURNS && ALII_4573_CLOSE_ALWAYS_RETURNS
+    set_errno(result);
+    return result;
+  #else
+    (result);
+    set_errno(0);
+    return 0;
+  #endif
 }
 
 int
@@ -1856,7 +1863,7 @@ lwip_getsockopt_internal(void *arg)
     LWIP_ASSERT("unhandled level", 0);
     break;
   } /* switch (level) */
-  sys_sem_signal(&sock->conn->op_completed);
+  conn_op_completed(sock->conn);
 }
 
 int
@@ -2060,7 +2067,7 @@ lwip_setsockopt(int s, int level, int optname, const void *optval, socklen_t opt
   data.optlen = &optlen;
   data.err = err;
   tcpip_callback(lwip_setsockopt_internal, &data);
-  sys_arch_sem_wait(&sock->conn->op_completed, 0);
+  conn_op_wait(sock->conn);
   /* maybe lwip_setsockopt_internal has changed err */
   err = data.err;
 
@@ -2274,7 +2281,7 @@ lwip_setsockopt_internal(void *arg)
     LWIP_ASSERT("unhandled level", 0);
     break;
   }  /* switch (level) */
-  sys_sem_signal(&sock->conn->op_completed);
+  conn_op_completed(sock->conn);
 }
 
 int

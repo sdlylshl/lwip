@@ -396,8 +396,27 @@ err_tcp(void *arg, err_t err)
       conn->current_msg->err = err;
       conn->current_msg = NULL;
       /* wake up the waiting task */
-      sys_sem_signal(&conn->op_completed);
+      conn_op_completed(conn);
     }
+#if 1
+    else if (conn->to_be_completed) {
+      SET_NONBLOCKING_CONNECT(conn, 0);
+      /* set error return code */
+      LWIP_ASSERT("conn->current_msg != NULL", conn->current_msg != NULL);
+      conn->current_msg->err = err;
+      conn->current_msg = NULL;
+      /* wake up the waiting task */
+      conn_op_completed(conn);
+    }
+  } else if (conn->to_be_completed) {
+    SET_NONBLOCKING_CONNECT(conn, 0);
+    /* set error return code */
+    LWIP_ASSERT("conn->current_msg != NULL", conn->current_msg != NULL);
+    conn->current_msg->err = err;
+    conn->current_msg = NULL;
+    /* wake up the waiting task */
+    conn_op_completed(conn);
+#endif
   } else {
     LWIP_ASSERT("conn->current_msg == NULL", conn->current_msg == NULL);
   }
@@ -746,6 +765,7 @@ netconn_drain(struct netconn *conn)
 static void
 do_close_internal(struct netconn *conn)
 {
+  LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("Begin do_close_internal conn=%08x conn->pcb.tcp=%08x localport=%d remoteip=%08x remoteport=%d\n", conn, conn->pcb.tcp, conn->pcb.tcp->local_port, conn->pcb.tcp->remote_ip, conn->pcb.tcp->remote_port));
   err_t err;
   u8_t shut, shut_rx, shut_tx, close;
 
@@ -783,13 +803,21 @@ do_close_internal(struct netconn *conn)
   }
   /* Try to close the connection */
   if (close) {
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("close:calling tcp_close conn=%08x conn->pcb.tcp=%08x\n", conn, conn->pcb.tcp));
     err = tcp_close(conn->pcb.tcp);
   } else {
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("close:shutdown:calling tcp_shutdown conn=%08x conn->pcb.tcp=%08x\n", conn, conn->pcb.tcp));
     err = tcp_shutdown(conn->pcb.tcp, shut_rx, shut_tx);
   }
-  if (err == ERR_OK) {
+  int close_always_returns = 0;
+  #if defined ALII_4573_CLOSE_ALWAYS_RETURNS && ALII_4573_CLOSE_ALWAYS_RETURNS
+    close_always_returns = 1;
+  #endif
+  if ((close_always_returns)||(err == ERR_OK)) {
+
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("Closing succeeded conn=%08x conn->pcb.tcp=%08x err=%d\n", conn, conn->pcb.tcp, err));
     /* Closing succeeded */
-    conn->current_msg->err = ERR_OK;
+    conn->current_msg->err = err;
     conn->current_msg = NULL;
     conn->state = NETCONN_NONE;
     if (close) {
@@ -806,10 +834,12 @@ do_close_internal(struct netconn *conn)
       API_EVENT(conn, NETCONN_EVT_SENDPLUS, 0);
     }
     /* wake up the application task */
-    sys_sem_signal(&conn->op_completed);
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("wake up the application task conn=%08x conn->pcb.tcp=%08x NETCONN_EVT_SENDPLUS\n", conn, conn->pcb.tcp));
+    conn_op_completed(conn);
   } else {
     /* Closing failed, restore some of the callbacks */
     /* Closing of listen pcb will never fail! */
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("close failed conn=%08x conn->pcb.tcp=%08x\n", conn, conn->pcb.tcp));
     LWIP_ASSERT("Closing a listen pcb may not fail!", (conn->pcb.tcp->state != LISTEN));
     tcp_sent(conn->pcb.tcp, sent_tcp);
     tcp_poll(conn->pcb.tcp, poll_tcp, 4);
@@ -819,6 +849,7 @@ do_close_internal(struct netconn *conn)
   }
   /* If closing didn't succeed, we get called again either
      from poll_tcp or from sent_tcp */
+  LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("End do_close_internal conn=%08x conn->pcb.tcp=%08x\n", conn, conn->pcb.tcp));
 }
 #endif /* LWIP_TCP */
 
@@ -883,7 +914,7 @@ do_delconn(struct api_msg_msg *msg)
     API_EVENT(msg->conn, NETCONN_EVT_SENDPLUS, 0);
   }
   if (sys_sem_valid(&msg->conn->op_completed)) {
-    sys_sem_signal(&msg->conn->op_completed);
+    conn_op_completed(msg->conn);
   }
 }
 
@@ -967,7 +998,7 @@ do_connected(void *arg, struct tcp_pcb *pcb, err_t err)
   API_EVENT(conn, NETCONN_EVT_SENDPLUS, 0);
 
   if (was_blocking) {
-    sys_sem_signal(&conn->op_completed);
+    conn_op_completed(conn);
   }
   return ERR_OK;
 }
@@ -1028,7 +1059,7 @@ do_connect(struct api_msg_msg *msg)
     break;
     }
   }
-  sys_sem_signal(&msg->conn->op_completed);
+  conn_op_completed(msg->conn);
 }
 
 /**
@@ -1322,7 +1353,7 @@ err_mem:
     if ((conn->flags & NETCONN_FLAG_WRITE_DELAYED) != 0)
 #endif
     {
-      sys_sem_signal(&conn->op_completed);
+      conn_op_completed(conn);
     }
   }
 #if LWIP_TCPIP_CORE_LOCKING
@@ -1456,20 +1487,27 @@ do_close(struct api_msg_msg *msg)
     /* this only happens for TCP netconns */
     LWIP_ASSERT("msg->conn->type == NETCONN_TCP", msg->conn->type == NETCONN_TCP);
     msg->err = ERR_INPROGRESS;
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("do_close ERR_INPROGRESS\n"));
   } else if ((msg->conn->pcb.tcp != NULL) && (msg->conn->type == NETCONN_TCP)) {
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("do_close pcb.tcb != NULL\n"));
     if ((msg->msg.sd.shut != NETCONN_SHUT_RDWR) && (msg->conn->state == NETCONN_LISTEN)) {
       /* LISTEN doesn't support half shutdown */
       msg->err = ERR_CONN;
+      LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("do_close ERR_CONN\n"));
     } else {
+      LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("do_close == NETCONN_SHUT_RDWR\n"));
       if (msg->msg.sd.shut & NETCONN_SHUT_RD) {
         /* Drain and delete mboxes */
+        LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("do_close calling netconn_drain\n"));
         netconn_drain(msg->conn);
       }
       LWIP_ASSERT("already writing or closing", msg->conn->current_msg == NULL &&
         msg->conn->write_offset == 0);
       msg->conn->state = NETCONN_CLOSE;
       msg->conn->current_msg = msg;
+      LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("do_close calling do_close_internal\n"));
       do_close_internal(msg->conn);
+      LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("do_close callED do_close_internal\n"));
       /* for tcp netconns, do_close_internal ACKs the message */
       return;
     }
@@ -1478,7 +1516,8 @@ do_close(struct api_msg_msg *msg)
   {
     msg->err = ERR_VAL;
   }
-  sys_sem_signal(&msg->conn->op_completed);
+  LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("do_close sys_sem_signal\n"));
+  conn_op_completed(msg->conn);
 }
 
 #if LWIP_IGMP

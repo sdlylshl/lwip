@@ -116,7 +116,6 @@ netconn_delete(struct netconn *conn)
   netconn_free(conn);
 
   /* don't care for return value of do_delconn since it only calls void functions */
-
   return ERR_OK;
 }
 

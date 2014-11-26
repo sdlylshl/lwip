@@ -130,6 +130,13 @@ tcp_send_fin(struct tcp_pcb *pcb)
     for (last_unsent = pcb->unsent; last_unsent->next != NULL;
          last_unsent = last_unsent->next);
 
+    #if defined ALII_4573_DONT_ADD_FIN_TO_RST && ALII_4573_DONT_ADD_FIN_TO_RST
+      if ((TCPH_FLAGS(last_unsent->tcphdr) & (TCP_RST)) != 0) {
+        /* already TCP_RST don't try to add a TCP_FIN */
+        return ERR_OK;
+      }
+    #endif
+
     if ((TCPH_FLAGS(last_unsent->tcphdr) & (TCP_SYN | TCP_FIN | TCP_RST)) == 0) {
       /* no SYN/FIN/RST flag in the header, we can add the FIN flag */
       TCPH_SET_FLAG(last_unsent->tcphdr, TCP_FIN);
@@ -731,13 +738,23 @@ tcp_enqueue_flags(struct tcp_pcb *pcb, u8_t flags)
   LWIP_ASSERT("tcp_enqueue_flags: need either TCP_SYN or TCP_FIN in flags (programmer violates API)",
               (flags & (TCP_SYN | TCP_FIN)) != 0);
 
+  u8_t nagle_check_snd_queuelen = 1;
+  #if defined ALII_4573_DONT_NAGLE_LIMIT_FIN_QUEUELEN && ALII_4573_DONT_NAGLE_LIMIT_FIN_QUEUELEN
+    nagle_check_snd_queuelen = 0;
+  #endif
+
   /* check for configured max queuelen and possible overflow */
-  if ((pcb->snd_queuelen >= TCP_SND_QUEUELEN) || (pcb->snd_queuelen > TCP_SNDQUEUELEN_OVERFLOW)) {
+  if ( (nagle_check_snd_queuelen && (pcb->snd_queuelen >= TCP_SND_QUEUELEN)) || (pcb->snd_queuelen > TCP_SNDQUEUELEN_OVERFLOW)) {
     LWIP_DEBUGF(TCP_OUTPUT_DEBUG | 3, ("tcp_enqueue_flags: too long queue %"U16_F" (max %"U16_F")\n",
                                        pcb->snd_queuelen, TCP_SND_QUEUELEN));
     TCP_STATS_INC(tcp.memerr);
     pcb->flags |= TF_NAGLEMEMERR;
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("TF_NAGLEMEMERR pcb->snd_queuelen=%u >= %u\n", pcb->snd_queuelen, TCP_SND_QUEUELEN));
     return ERR_MEM;
+  }
+
+  if (!nagle_check_snd_queuelen && (pcb->snd_queuelen >= TCP_SND_QUEUELEN)) {
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("We skipped NAGLE pcb->snd_queuelen=%u >= %u\n", pcb->snd_queuelen, TCP_SND_QUEUELEN));
   }
 
   if (flags & TCP_SYN) {
@@ -757,6 +774,7 @@ tcp_enqueue_flags(struct tcp_pcb *pcb, u8_t flags)
   if (pcb->snd_buf == 0) {
     LWIP_DEBUGF(TCP_OUTPUT_DEBUG | 3, ("tcp_enqueue_flags: no send buffer available\n"));
     TCP_STATS_INC(tcp.memerr);
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("tcp_enqueue_flags: NO SEND BUFFER AVAILABLE\n"));
     return ERR_MEM;
   }
 
@@ -764,6 +782,7 @@ tcp_enqueue_flags(struct tcp_pcb *pcb, u8_t flags)
   if ((p = pbuf_alloc(PBUF_TRANSPORT, optlen, PBUF_RAM)) == NULL) {
     pcb->flags |= TF_NAGLEMEMERR;
     TCP_STATS_INC(tcp.memerr);
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("tcp_enqueue_flags: pbuf_alloc returned NULL"));
     return ERR_MEM;
   }
   LWIP_ASSERT("tcp_enqueue_flags: check that first pbuf can hold optlen",
@@ -773,6 +792,7 @@ tcp_enqueue_flags(struct tcp_pcb *pcb, u8_t flags)
   if ((seg = tcp_create_segment(pcb, p, flags, pcb->snd_lbb, optflags)) == NULL) {
     pcb->flags |= TF_NAGLEMEMERR;
     TCP_STATS_INC(tcp.memerr);
+    LWIP_DEBUGF(ALII_4573_CLOSE_DEBUG, ("tcp_enqueue_flags: tcp_create_segment returned NULL\n"));
     return ERR_MEM;
   }
   LWIP_ASSERT("seg->tcphdr not aligned", ((mem_ptr_t)seg->tcphdr % MEM_ALIGNMENT) == 0);
